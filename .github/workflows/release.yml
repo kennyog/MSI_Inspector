@@ -1,0 +1,53 @@
+# Builds MSI Inspector on GitHub's Windows servers and publishes a release when a version tag
+# (like v1.0.0) is pushed. Each .exe gets a signed build attestation and a SHA-256 checksum, so
+# anyone can verify a download was built from this repository's source.
+name: Build and release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the release
+  id-token: write # sign the build attestation
+  attestations: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      # Actions are pinned to exact commits so a changed tag can't alter the build
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Build the .exe files
+        shell: pwsh
+        run: |
+          dotnet publish src/MsiInspector -c Release -r win-x64 -o out/x64
+          dotnet publish src/MsiInspector -c Release -r win-arm64 -o out/arm64
+          Copy-Item out/x64/MsiInspector.exe MsiInspector-win-x64.exe
+          Copy-Item out/arm64/MsiInspector.exe MsiInspector-win-arm64.exe
+          Get-FileHash MsiInspector-win-x64.exe, MsiInspector-win-arm64.exe -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
+            Out-File SHA256SUMS.txt -Encoding ascii
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: "MsiInspector-win-*.exe"
+
+      - name: Publish the release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release create $env:TAG MsiInspector-win-x64.exe MsiInspector-win-arm64.exe SHA256SUMS.txt `
+            --title "MSI Inspector $env:TAG" --generate-notes

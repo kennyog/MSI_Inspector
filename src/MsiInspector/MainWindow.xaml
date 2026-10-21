@@ -1,0 +1,132 @@
+<Window x:Class="MsiInspector.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MSI Inspector" Height="720" Width="1280" MinWidth="800" MinHeight="450"
+        WindowStartupLocation="CenterScreen" FontFamily="Segoe UI" FontSize="13">
+  <DockPanel>
+
+    <!-- Folder picker -->
+    <Border DockPanel.Dock="Top" Background="#F3F5F8" BorderBrush="#DADFE6" BorderThickness="0,0,0,1" Padding="10,8">
+      <DockPanel>
+        <Button x:Name="BrowseButton" DockPanel.Dock="Left" Content="Choose folder..." Click="Browse_Click" />
+        <Button x:Name="ScanButton" DockPanel.Dock="Right" Content="Scan" Click="Scan_Click" FontWeight="SemiBold" IsDefault="True" Margin="6,0,0,0" />
+        <Button x:Name="CancelButton" DockPanel.Dock="Right" Content="Cancel" Click="Cancel_Click" IsEnabled="False" Margin="6,0,0,0" />
+        <TextBox x:Name="FolderBox" VerticalContentAlignment="Center" ToolTip="Folder to scan (all subfolders are included)" />
+      </DockPanel>
+    </Border>
+
+    <!-- Status bar -->
+    <StatusBar DockPanel.Dock="Bottom">
+      <StatusBarItem>
+        <TextBlock x:Name="StatusText" Text="Choose a folder and click Scan." />
+      </StatusBarItem>
+      <StatusBarItem HorizontalAlignment="Right">
+        <ProgressBar x:Name="Progress" Width="200" Height="14" Visibility="Collapsed" />
+      </StatusBarItem>
+    </StatusBar>
+
+    <TabControl x:Name="Tabs" Margin="8">
+
+      <!-- MSI files -->
+      <TabItem Header="MSI Files">
+        <DockPanel Margin="4">
+          <WrapPanel DockPanel.Dock="Top" Margin="0,4,0,8">
+            <TextBlock Text="Find duplicate:" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <ToggleButton x:Name="DupProductCode" Content="ProductCode" Click="Duplicate_Click" Tag="ProductCode"
+                          ToolTip="Show only files that share a ProductCode with another file" />
+            <ToggleButton x:Name="DupUpgradeCode" Content="UpgradeCode" Click="Duplicate_Click" Tag="UpgradeCode"
+                          ToolTip="Show only files that share an UpgradeCode (normal for versions of one product)" />
+            <ToggleButton x:Name="DupPackageCode" Content="PackageCode" Click="Duplicate_Click" Tag="PackageCode"
+                          ToolTip="Show only files that share a PackageCode (different files should never do this)" />
+            <Button Content="Show all" Click="ShowAll_Click" />
+            <Separator Width="16" Background="Transparent" />
+            <TextBlock Text="Filter:" VerticalAlignment="Center" Margin="0,0,6,0" />
+            <TextBox x:Name="FilterBox" Width="240" VerticalContentAlignment="Center" TextChanged="Filter_TextChanged"
+                     ToolTip="Show rows containing this text in any column" />
+            <Separator Width="16" Background="Transparent" />
+            <Button Content="Export CSV..." Click="ExportPackages_Click" />
+          </WrapPanel>
+          <DataGrid x:Name="PackageGrid" MouseDoubleClick="Grid_MouseDoubleClick">
+            <DataGrid.ContextMenu>
+              <ContextMenu>
+                <MenuItem Header="Copy" Command="ApplicationCommands.Copy" />
+                <MenuItem Header="Copy whole row" Click="CopyRow_Click" />
+                <MenuItem Header="Open containing folder" Click="OpenFolder_Click" />
+              </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="File" Binding="{Binding FileName}" Width="200" />
+              <DataGridTextColumn Header="Product Name" Binding="{Binding ProductName}" Width="200" />
+              <DataGridTextColumn Header="Version" Binding="{Binding ProductVersion}" Width="90" />
+              <DataGridTextColumn Header="Manufacturer" Binding="{Binding Manufacturer}" Width="150" />
+              <DataGridTextColumn Header="ProductCode" Binding="{Binding ProductCode}" Width="290" FontFamily="Consolas" />
+              <DataGridTextColumn Header="UpgradeCode" Binding="{Binding UpgradeCode}" Width="290" FontFamily="Consolas" />
+              <DataGridTextColumn Header="PackageCode" Binding="{Binding PackageCode}" Width="290" FontFamily="Consolas" />
+              <DataGridTextColumn Header="Language" Binding="{Binding Language}" Width="75" />
+              <DataGridTextColumn Header="Custom Actions" Binding="{Binding CustomActionCount}" Width="105" />
+              <DataGridTextColumn x:Name="DuplicateColumn" Header="Shared By" Binding="{Binding DuplicateCount}" Width="80" Visibility="Collapsed" />
+              <DataGridTextColumn Header="Folder" Binding="{Binding Folder}" Width="300" />
+              <DataGridTextColumn Header="Problem" Binding="{Binding Error}" Width="200" Foreground="Firebrick" />
+            </DataGrid.Columns>
+          </DataGrid>
+        </DockPanel>
+      </TabItem>
+
+      <!-- Custom actions -->
+      <TabItem Header="Custom Actions">
+        <Grid Margin="4">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="320" />
+            <ColumnDefinition Width="6" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+
+          <DockPanel Grid.Column="0">
+            <TextBlock DockPanel.Dock="Top" Text="Shared across MSIs" FontWeight="SemiBold" Margin="0,4,0,2" />
+            <TextBlock DockPanel.Dock="Top" Text="Custom action names found in 2 or more MSIs. Click one to see where it's used."
+                       TextWrapping="Wrap" Foreground="#666" Margin="0,0,0,6" />
+            <DataGrid x:Name="SharedGrid" SelectionUnit="FullRow" SelectionMode="Single" SelectionChanged="SharedGrid_SelectionChanged">
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Custom Action" Binding="{Binding Action}" Width="*" />
+                <DataGridTextColumn Header="MSIs" Binding="{Binding MsiCount}" Width="50" />
+                <DataGridTextColumn Header="Variants" Binding="{Binding Variants}" Width="62" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+
+          <GridSplitter Grid.Column="1" Width="6" HorizontalAlignment="Stretch" Background="Transparent" />
+
+          <DockPanel Grid.Column="2">
+            <WrapPanel DockPanel.Dock="Top" Margin="0,4,0,8">
+              <TextBlock Text="Search custom actions:" VerticalAlignment="Center" Margin="0,0,6,0" />
+              <TextBox x:Name="CaSearchBox" Width="300" VerticalContentAlignment="Center" TextChanged="CaSearch_TextChanged"
+                       ToolTip="Matches the custom action name, its source, or its target" />
+              <CheckBox x:Name="CaExactBox" Content="Exact name" VerticalAlignment="Center" Margin="10,0,0,0" Click="CaSearch_Changed" />
+              <Separator Width="16" Background="Transparent" />
+              <Button Content="Export CSV..." Click="ExportCustomActions_Click" />
+            </WrapPanel>
+            <DataGrid x:Name="CustomActionGrid" MouseDoubleClick="Grid_MouseDoubleClick">
+              <DataGrid.ContextMenu>
+                <ContextMenu>
+                  <MenuItem Header="Copy" Command="ApplicationCommands.Copy" />
+                  <MenuItem Header="Copy whole row" Click="CopyRow_Click" />
+                  <MenuItem Header="Open containing folder" Click="OpenFolder_Click" />
+                </ContextMenu>
+              </DataGrid.ContextMenu>
+              <DataGrid.Columns>
+                <DataGridTextColumn Header="Custom Action" Binding="{Binding Action}" Width="220" />
+                <DataGridTextColumn Header="MSI File" Binding="{Binding FileName}" Width="200" />
+                <DataGridTextColumn Header="Product" Binding="{Binding ProductName}" Width="180" />
+                <DataGridTextColumn Header="Type" Binding="{Binding Type}" Width="60" />
+                <DataGridTextColumn Header="What It Is" Binding="{Binding TypeDescription}" Width="260" />
+                <DataGridTextColumn Header="Source" Binding="{Binding Source}" Width="160" />
+                <DataGridTextColumn Header="Target" Binding="{Binding Target}" Width="300" />
+                <DataGridTextColumn Header="Path" Binding="{Binding FullPath}" Width="300" />
+              </DataGrid.Columns>
+            </DataGrid>
+          </DockPanel>
+        </Grid>
+      </TabItem>
+    </TabControl>
+  </DockPanel>
+</Window>
